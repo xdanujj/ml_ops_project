@@ -9,22 +9,27 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # Step 1️⃣: Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # Step 2️⃣: Set up Python
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
+      # Step 3️⃣: Install dependencies
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
-          pip install pytest databricks-cli==0.17.7
+          pip install pytest databricks-cli
 
+      # Step 4️⃣: Run tests
       - name: Run tests
         run: pytest tests/
 
+      # Step 5️⃣: Trigger Databricks Training Job
       - name: Trigger Databricks Training Job
         env:
           DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
@@ -32,11 +37,12 @@ jobs:
           DATABRICKS_JOB_ID: ${{ secrets.DATABRICKS_JOB_ID }}
         run: |
           echo "🚀 Configuring Databricks CLI..."
-          mkdir -p ~/.databricks
-          echo "[DEFAULT]" > ~/.databricks/config
-          echo "host = $DATABRICKS_HOST" >> ~/.databricks/config
-          echo "token = $DATABRICKS_TOKEN" >> ~/.databricks/config
+          databricks configure --token --host "$DATABRICKS_HOST" <<< "$DATABRICKS_TOKEN"
+          
+          echo "🚀 Upgrading to latest Jobs API..."
+          databricks jobs configure --version=2.1
           
           echo "🚀 Triggering Databricks job..."
-          databricks jobs run-now --job-id $DATABRICKS_JOB_ID
+          databricks jobs run-now --job-id "$DATABRICKS_JOB_ID"
+          
           echo "✅ Databricks job triggered successfully!"
