@@ -2,14 +2,14 @@ name: Databricks CI/CD Pipeline
 
 on:
   push:
-    branches: [ main ]     # pipeline runs automatically whenever code is pushed to 'main'
+    branches: [ main ]  # Runs automatically when code is pushed to 'main'
 
 jobs:
   build-train-deploy:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1️⃣: Checkout your repository code
+      # Step 1️⃣: Checkout repository code
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -25,19 +25,23 @@ jobs:
           pip install -r requirements.txt
           pip install pytest databricks-cli
 
-      # Step 4️⃣: Run simple tests (to ensure repo integrity)
+      # Step 4️⃣: Run tests
       - name: Run tests
         run: pytest tests/
 
-      # Step 5️⃣: Trigger Databricks Job (Model Training on Cloud)
+      # Step 5️⃣: Trigger Databricks Job (Model Training)
       - name: Trigger Databricks Training Job
         env:
           DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
           DATABRICKS_JOB_ID: ${{ secrets.DATABRICKS_JOB_ID }}
         run: |
+          echo "🚀 Configuring Databricks CLI..."
+          databricks configure --host $DATABRICKS_HOST --token $DATABRICKS_TOKEN
+          
           echo "🚀 Starting Databricks job..."
           databricks jobs run-now --job-id $DATABRICKS_JOB_ID
+          
           echo "✅ Databricks job triggered successfully!"
 
       # Step 6️⃣ (Optional): Build and Push Docker Image
