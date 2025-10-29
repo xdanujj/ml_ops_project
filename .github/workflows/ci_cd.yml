@@ -1,49 +1,76 @@
-name: CI/CD Pipeline for ML Project with Databricks
+name: Databricks CI/CD Pipeline
 
 on:
   push:
-    branches:
-      - main
-  pull_request:
+    branches: [ main ]  # Trigger on push to main branch
 
 jobs:
-  build-and-deploy:
+  build-train-deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v3
+      # Step 1️⃣: Checkout repository
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
+      # Step 2️⃣: Set up Python
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.9'
+          python-version: '3.10'
 
-      - name: Install Dependencies
+      # Step 3️⃣: Install dependencies
+      - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
           pip install -r requirements.txt
+          pip install pytest databricks-cli
 
-      - name: Run Unit Tests
-        run: |
-          echo "🧪 Running tests..."
-          pytest || echo "⚠️ Tests failed, but continuing..."
+      # Step 4️⃣: Run tests
+      - name: Run tests
+        run: pytest tests/
 
-      - name: Configure Databricks CLI
+      # Step 5️⃣: Configure and Trigger Databricks Job
+      - name: Configure and Trigger Databricks Job
         env:
           DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+          DATABRICKS_JOB_ID: ${{ secrets.DATABRICKS_JOB_ID }}
+        shell: bash
         run: |
-          echo "🚀 Configuring Databricks CLI..."
+          echo "🚀 Setting up Databricks CLI..."
+
           mkdir -p ~/.databricks
-          printf "[DEFAULT]\nhost = %s\ntoken = %s\n" "$DATABRICKS_HOST" "$DATABRICKS_TOKEN" > ~/.databricks/config
-          echo "✅ Databricks CLI configured successfully."
+          # ✅ Safe heredoc syntax (no YAML parsing errors)
+          cat > ~/.databricks/config <<EOF
+[DEFAULT]
+host = ${DATABRICKS_HOST}
+token = ${DATABRICKS_TOKEN}
+EOF
+
+          echo "✅ Databricks CLI configured."
+
+          echo "🔁 Upgrading to Jobs API 2.1..."
           databricks jobs configure --version=2.1
 
-      - name: Trigger Databricks Job
-        env:
-          DATABRICKS_JOB_ID: ${{ secrets.DATABRICKS_JOB_ID }}
-        run: |
           echo "🚀 Triggering Databricks job..."
-          databricks jobs run-now --job-id "$DATABRICKS_JOB_ID"
+          databricks jobs run-now --job-id "${DATABRICKS_JOB_ID}"
+
           echo "✅ Databricks job triggered successfully!"
+
+      # Step 6️⃣ (Optional): Build and Push Docker Image
+      - name: Build and Push Docker Image
+        if: success()
+        env:
+          DOCKER_USER: ${{ secrets.DOCKER_USER }}
+          DOCKER_PASS: ${{ secrets.DOCKER_PASS }}
+        run: |
+          if [ -z "$DOCKER_USER" ] || [ -z "$DOCKER_PASS" ]; then
+            echo "⚠ Docker credentials not found, skipping Docker build."
+            exit 0
+          fi
+
+          echo "🐳 Building Docker image..."
+          echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
+          docker build -t $DOCKER_USER/crop-rec-model:latest .
+          docker push $DOCKER_USER/crop-rec-model:latest
+          echo "✅ Docker image pushed successfully!"

@@ -1,0 +1,5 @@
+pytest
+databricks-cli
+pandas
+numpy
+scikit-learn
